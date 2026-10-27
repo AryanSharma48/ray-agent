@@ -13,23 +13,21 @@ const SALT_LEN = 16;
 const IV_LEN = 12;
 
 /**
- * Encrypt an API key with a password using AES-256-GCM
+ * Encrypt an API key with a password (cross-platform compatible with PowerShell and Node)
  */
 export function encryptApiKey(apiKey, password) {
-  const salt = crypto.randomBytes(SALT_LEN);
-  const iv = crypto.randomBytes(IV_LEN);
-  const key = crypto.scryptSync(password, salt, KEY_LEN);
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(16);
+  const key = crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha1');
 
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
   let encrypted = cipher.update(apiKey, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  const authTag = cipher.getAuthTag().toString('hex');
 
   return {
     salt: salt.toString('hex'),
     iv: iv.toString('hex'),
-    authTag,
-    encrypted
+    ciphertext: encrypted
   };
 }
 
@@ -38,6 +36,16 @@ export function encryptApiKey(apiKey, password) {
  */
 export function decryptApiKey(payload, password) {
   try {
+    if (payload.ciphertext) {
+      const salt = Buffer.from(payload.salt, 'hex');
+      const iv = Buffer.from(payload.iv, 'hex');
+      const key = crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha1');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(Buffer.from(payload.ciphertext, 'hex'), null, 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    }
+
     const salt = Buffer.from(payload.salt, 'hex');
     const iv = Buffer.from(payload.iv, 'hex');
     const authTag = Buffer.from(payload.authTag, 'hex');

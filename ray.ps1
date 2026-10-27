@@ -45,6 +45,43 @@ $WtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d
 $fullCmd = "$($MyInvocation.Line) $([Environment]::CommandLine)"
 $IsGhost = $ghost -or ($fullCmd -cmatch '(\s|^)-G(\s|$)')
 $IsStealth = ($g -and !$IsGhost) -or $stealth -or $IsGhost
+$IsShared = $s -or $shared -or ($fullCmd -cmatch '(\s|^)-s(\s|$)') -or ($fullCmd -cmatch '(\s|^)--shared(\s|$)')
+
+$BundledSecret = @{
+    salt = "28017d9f89b7eb4ea88aa2eeeee2af5b"
+    iv = "4d493a1321c75620d7cd609eb7e9b5b5"
+    ciphertext = "bb74244c54083a600a4756798df27d22a9c3b1e3e5454c71b9fb2affe63c370d87cd9aec33c1702c7a24ffc60fe6a1fb9f1a6648daa0c2ac0db0ed4016c7810d"
+}
+
+function Decrypt-SharedKey($secretPayload, [string]$password) {
+    try {
+        $salt = [byte[]]@($secretPayload.salt -replace '..', '0x$& ' -split ' ' -ne '' | ForEach-Object { [byte]$_ })
+        $iv = [byte[]]@($secretPayload.iv -replace '..', '0x$& ' -split ' ' -ne '' | ForEach-Object { [byte]$_ })
+        $encBytes = [byte[]]@($secretPayload.ciphertext -replace '..', '0x$& ' -split ' ' -ne '' | ForEach-Object { [byte]$_ })
+
+        $derive = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($password, $salt, 10000)
+        $key = $derive.GetBytes(32)
+
+        $aes = [System.Security.Cryptography.Aes]::Create()
+        $aes.Key = $key
+        $aes.IV = $iv
+
+        $decryptor = $aes.CreateDecryptor()
+        $decBytes = $decryptor.TransformFinalBlock($encBytes, 0, $encBytes.Length)
+        return [System.Text.Encoding]::UTF8.GetString($decBytes)
+    } catch {
+        return $null
+    }
+}
+
+function Prompt-SharedPassword {
+    $sec = Read-Host "enter shared password" -AsSecureString
+    if (!$sec) { return "" }
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+    $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    return $plain
+}
 
 function Get-RayConfig {
     if (Test-Path $ConfigFile) {
@@ -214,7 +251,32 @@ if ($SetKey) {
 
 # 1. Resolve API Key
 $ApiKey = $env:GROQ_API_KEY
-if (!$ApiKey -and $cfg.apiKey) {
+
+if ($IsShared -or ($cfg.useShared -and !$ApiKey)) {
+    $secret = $BundledSecret
+    if (Test-Path "$ConfigDir\shared-secret.json") {
+        try { $secret = Get-Content "$ConfigDir\shared-secret.json" -Raw | ConvertFrom-Json } catch {}
+    }
+
+    if (!$IsStealth) {
+        Write-Host "`nray shared key mode" -ForegroundColor Cyan
+    }
+    $pass = Prompt-SharedPassword
+    if (!$pass) {
+        Write-Host "error: password required" -ForegroundColor Red
+        return
+    }
+
+    $decrypted = Decrypt-SharedKey $secret $pass
+    if (!$decrypted) {
+        Write-Host "error: invalid password or corrupted shared key payload." -ForegroundColor Red
+        return
+    }
+    $ApiKey = $decrypted
+    $cfg | Add-Member -MemberType NoteProperty -Name "useShared" -Value $true -Force
+    Save-RayConfig $cfg
+    if (!$IsStealth) { Write-Host "ok: shared key unlocked`n" -ForegroundColor Green }
+} elseif (!$ApiKey -and $cfg.apiKey) {
     $ApiKey = $cfg.apiKey
 }
 
@@ -222,16 +284,39 @@ if (!$ApiKey) {
     if (!$IsStealth) {
         Write-Host "`nray (groq cli)" -ForegroundColor Cyan
         Write-Host "---------------------------------------------"
+        Write-Host "Provide your Groq API key or type '-s' to use a shared key:`n"
     }
-    $entered = Read-Host "enter your Groq API key (starts with gsk_)"
+    $entered = Read-Host "enter groq api key or -s"
     if (!$entered) {
         Write-Host "error: no api key provided" -ForegroundColor Red
         return
     }
-    $ApiKey = $entered.Trim()
-    $cfg | Add-Member -MemberType NoteProperty -Name "apiKey" -Value $ApiKey -Force
-    Save-RayConfig $cfg
-    if (!$IsStealth) { Write-Host "ok: api key saved to ~/.ray-agent/config.json`n" -ForegroundColor Green }
+    if ($entered.Trim() -eq "-s") {
+        $secret = $BundledSecret
+        if (Test-Path "$ConfigDir\shared-secret.json") {
+            try { $secret = Get-Content "$ConfigDir\shared-secret.json" -Raw | ConvertFrom-Json } catch {}
+        }
+        $pass = Prompt-SharedPassword
+        if (!$pass) {
+            Write-Host "error: password required" -ForegroundColor Red
+            return
+        }
+        $decrypted = Decrypt-SharedKey $secret $pass
+        if (!$decrypted) {
+            Write-Host "error: invalid password or corrupted shared key payload." -ForegroundColor Red
+            return
+        }
+        $ApiKey = $decrypted
+        $cfg | Add-Member -MemberType NoteProperty -Name "useShared" -Value $true -Force
+        Save-RayConfig $cfg
+        if (!$IsStealth) { Write-Host "ok: preference saved to use shared key`n" -ForegroundColor Green }
+    } else {
+        $ApiKey = $entered.Trim()
+        $cfg | Add-Member -MemberType NoteProperty -Name "apiKey" -Value $ApiKey -Force
+        $cfg | Add-Member -MemberType NoteProperty -Name "useShared" -Value $false -Force
+        Save-RayConfig $cfg
+        if (!$IsStealth) { Write-Host "ok: api key saved to ~/.ray-agent/config.json`n" -ForegroundColor Green }
+    }
 }
 
 # 2. Apply Ghost Mode (-G) window injection after key resolution

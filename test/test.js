@@ -12,8 +12,7 @@ console.log('Running Ray CLI tests...\n');
   const payload = encryptApiKey(testKey, testPassword);
   assert(payload.salt, 'Payload must have salt');
   assert(payload.iv, 'Payload must have iv');
-  assert(payload.authTag, 'Payload must have authTag');
-  assert(payload.encrypted, 'Payload must have encrypted content');
+  assert(payload.ciphertext, 'Payload must have ciphertext');
 
   const decrypted = decryptApiKey(payload, testPassword);
   assert.strictEqual(decrypted, testKey, 'Decrypted key must match original');
