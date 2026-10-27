@@ -39,7 +39,11 @@ STRICT RULES:
 
 $ConfigDir = "$HOME\.ray-agent"
 $ConfigFile = "$ConfigDir\config.json"
-$WtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+$WtSettingsPaths = @(
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json",
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json",
+    "$env:LOCALAPPDATA\Microsoft\Windows Terminal\settings.json"
+)
 
 # In PowerShell parameter names are case-insensitive, so both -g and -G map to $g unless checked case-sensitively
 $fullCmd = "$($MyInvocation.Line) $([Environment]::CommandLine)"
@@ -140,44 +144,60 @@ function Set-ConsoleTransparency([byte]$alpha) {
 
 function Apply-WindowInjection {
     Set-ConsoleTransparency 35
-    if (Test-Path $WtSettingsPath) {
-        try {
-            $settings = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
-            if (!$settings.profiles) {
-                $settings | Add-Member -MemberType NoteProperty -Name "profiles" -Value ([PSCustomObject]@{}) -Force
-            }
-            if (!$settings.profiles.defaults) {
-                $settings.profiles | Add-Member -MemberType NoteProperty -Name "defaults" -Value ([PSCustomObject]@{}) -Force
-            }
+    foreach ($wtPath in $WtSettingsPaths) {
+        if (Test-Path $wtPath) {
+            try {
+                $settings = Get-Content $wtPath -Raw | ConvertFrom-Json
+                if (!$settings.profiles) {
+                    $settings | Add-Member -MemberType NoteProperty -Name "profiles" -Value ([PSCustomObject]@{}) -Force
+                }
+                if (!$settings.profiles.defaults) {
+                    $settings.profiles | Add-Member -MemberType NoteProperty -Name "defaults" -Value ([PSCustomObject]@{}) -Force
+                }
 
-            $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name "opacity" -Value 0 -Force
-            $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name "useAcrylic" -Value $false -Force
-            $settings | Add-Member -MemberType NoteProperty -Name "minimizeToNotificationArea" -Value $true -Force
+                $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name "opacity" -Value 0 -Force
+                $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name "useAcrylic" -Value $false -Force
+                $settings | Add-Member -MemberType NoteProperty -Name "minimizeToNotificationArea" -Value $true -Force
+                $settings | Add-Member -MemberType NoteProperty -Name "alwaysShowNotificationIcon" -Value $true -Force
+                $settings | Add-Member -MemberType NoteProperty -Name "autoHideWindow" -Value $true -Force
 
-            $settings | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
-        } catch {}
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $wtPath -Encoding UTF8
+            } catch {}
+        }
     }
 }
 
 function Restore-WindowInjection {
     Set-ConsoleTransparency 255
-    if (Test-Path $WtSettingsPath) {
-        try {
-            $settings = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
-            if ($settings.PSObject.Properties['minimizeToNotificationArea']) {
-                $settings.PSObject.Properties.Remove('minimizeToNotificationArea')
-            }
-            if ($settings.profiles.defaults) {
-                if ($settings.profiles.defaults.PSObject.Properties['opacity']) {
-                    $settings.profiles.defaults.PSObject.Properties.Remove('opacity')
+    $restoredAny = $false
+    foreach ($wtPath in $WtSettingsPaths) {
+        if (Test-Path $wtPath) {
+            try {
+                $settings = Get-Content $wtPath -Raw | ConvertFrom-Json
+                if ($settings.PSObject.Properties['minimizeToNotificationArea']) {
+                    $settings.PSObject.Properties.Remove('minimizeToNotificationArea')
                 }
-                if ($settings.profiles.defaults.PSObject.Properties['useAcrylic']) {
-                    $settings.profiles.defaults.PSObject.Properties.Remove('useAcrylic')
+                if ($settings.PSObject.Properties['alwaysShowNotificationIcon']) {
+                    $settings.PSObject.Properties.Remove('alwaysShowNotificationIcon')
                 }
-            }
-            $settings | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
-            Write-Host "ok: terminal window and settings restored to defaults" -ForegroundColor Green
-        } catch {}
+                if ($settings.PSObject.Properties['autoHideWindow']) {
+                    $settings.PSObject.Properties.Remove('autoHideWindow')
+                }
+                if ($settings.profiles.defaults) {
+                    if ($settings.profiles.defaults.PSObject.Properties['opacity']) {
+                        $settings.profiles.defaults.PSObject.Properties.Remove('opacity')
+                    }
+                    if ($settings.profiles.defaults.PSObject.Properties['useAcrylic']) {
+                        $settings.profiles.defaults.PSObject.Properties.Remove('useAcrylic')
+                    }
+                }
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $wtPath -Encoding UTF8
+                $restoredAny = $true
+            } catch {}
+        }
+    }
+    if ($restoredAny) {
+        Write-Host "ok: terminal window and settings restored to defaults" -ForegroundColor Green
     } else {
         Write-Host "ok: console transparency restored to 100%" -ForegroundColor Green
     }
