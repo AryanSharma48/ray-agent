@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { exec } from 'node:child_process';
 
 const wtSettingsPath = path.join(
   process.env.LOCALAPPDATA || '',
@@ -10,23 +9,6 @@ const wtSettingsPath = path.join(
   'LocalState',
   'settings.json'
 );
-
-/**
- * Toggles Full Screen (F11) on the current window.
- * MUST be called only after user has finished entering their password.
- */
-export function toggleFullscreen() {
-  if (os.platform() !== 'win32') return;
-
-  // 1. Try VT sequence first (cleanest, zero keystroke simulation)
-  if (process.stdout.isTTY) {
-    process.stdout.write('\x1b[10;1t'); // XTerm standard VT: set fullscreen
-  }
-
-  // 2. Also send F11 via WScript.Shell
-  const script = '$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys("{F11}")';
-  exec(`powershell -NoProfile -NonInteractive -Command "${script}"`, () => {});
-}
 
 /**
  * Injects transparency and taskbar hiding into Windows Terminal:

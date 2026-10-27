@@ -8,7 +8,7 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
-import { applyWindowInjection, restoreWindowInjection, toggleFullscreen } from '../src/inject.js';
+import { applyWindowInjection, restoreWindowInjection } from '../src/inject.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,12 +35,12 @@ ${bold('USAGE')}
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
   ${cyan('ray')} -g <question>             Stealth text mode (low-contrast text)
-  ${cyan('ray')} -G [question]             Ghost mode: stealth text + 100% clear transparency + fullscreen + hidden taskbar
+  ${cyan('ray')} -G [question]             Ghost mode: stealth text + 100% transparent glass + hidden taskbar
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
   ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray, silent prompt)
-  ${cyan('-G, --ghost')}                   Ghost window injection (100% transparent, fullscreen, hide taskbar)
+  ${cyan('-G, --ghost')}                   Ghost window injection (100% transparent, hide taskbar)
   ${cyan('--restore')}                     Restore Windows Terminal window settings to normal
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
@@ -141,11 +141,9 @@ async function main() {
   // STEP 1: Resolve API Key FIRST. The user types their password with zero window or key interference!
   const apiKey = await resolveApiKey({ forceShared, silent: isStealth });
 
-  // STEP 2: Apply window injection (100% transparent, hidden taskbar, fullscreen) ONLY AFTER authentication
+  // STEP 2: Apply window injection (100% transparent, hidden taskbar) ONLY AFTER authentication
   if (isGhost) {
     applyWindowInjection({ transparent: true, hideTaskbar: true });
-    await new Promise(resolve => setTimeout(resolve, 80));
-    toggleFullscreen();
   }
 
   // Query construction
