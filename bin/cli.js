@@ -8,6 +8,7 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
+import { applyWindowInjection, restoreWindowInjection, toggleFullscreen } from '../src/inject.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,11 +34,14 @@ ${bold('USAGE')}
   ${cyan('ray')}                           Start interactive chat (REPL)
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
-  ${cyan('ray')} -g <question>             Stealth mode (subtle low-contrast text)
+  ${cyan('ray')} -g <question>             Stealth text mode (low-contrast text)
+  ${cyan('ray')} -G [question]             Ghost mode: stealth text + 100% clear transparency + fullscreen + hidden taskbar
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
   ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray, silent prompt)
+  ${cyan('-G, --ghost')}                   Ghost window injection (100% transparent, fullscreen, hide taskbar)
+  ${cyan('--restore')}                     Restore Windows Terminal window settings to normal
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
   ${cyan('--model')} <name>                Select model (default: qwen/qwen3.8-27b)
@@ -50,7 +54,7 @@ ${bold('OPTIONS')}
 ${bold('EXAMPLES')}
   ray "kill process on port 3000"
   ray -g "convert string to title case in python"
-  ray "sql left join syntax"
+  ray -G "sql left join syntax"
   git diff | ray "summarize changes"
 `);
 }
@@ -66,6 +70,12 @@ async function main() {
 
   if (args.includes('-v') || args.includes('--version')) {
     console.log(pkg.version);
+    process.exit(0);
+  }
+
+  if (args.includes('--restore')) {
+    restoreWindowInjection();
+    console.log(green('ok: windows terminal settings restored to defaults'));
     process.exit(0);
   }
 
@@ -91,6 +101,9 @@ async function main() {
     process.exit(0);
   }
 
+  // Ghost mode (-G)
+  const isGhost = args.includes('-G') || args.includes('--ghost');
+
   // Key flag
   const keyIdx = args.findIndex(a => a === '--key');
   if (keyIdx !== -1 && args[keyIdx + 1]) {
@@ -112,10 +125,11 @@ async function main() {
   }
 
   // Stealth flag
-  const isStealth = args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
+  const isStealth = isGhost || args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
   const filteredArgs = args.filter(a =>
     a !== '-s' && a !== '--shared' &&
-    a !== '-g' && a !== '--stealth'
+    a !== '-g' && a !== '--stealth' &&
+    a !== '-G' && a !== '--ghost'
   );
 
   // Shared flag
@@ -124,8 +138,15 @@ async function main() {
   // Check stdin for piped data
   const stdinData = await readStdin();
 
-  // Resolve API Key
+  // STEP 1: Resolve API Key FIRST. The user types their password with zero window or key interference!
   const apiKey = await resolveApiKey({ forceShared, silent: isStealth });
+
+  // STEP 2: Apply window injection (100% transparent, hidden taskbar, fullscreen) ONLY AFTER authentication
+  if (isGhost) {
+    applyWindowInjection({ transparent: true, hideTaskbar: true });
+    await new Promise(resolve => setTimeout(resolve, 80));
+    toggleFullscreen();
+  }
 
   // Query construction
   const query = filteredArgs.join(' ').trim();

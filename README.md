@@ -117,20 +117,22 @@ If you are publishing or sharing this package and want others to be able to use 
 
 ---
 
-## Stealth Mode (Anti-Shoulder-Surfing)
+## Stealth & Ghost Mode (Anti-Shoulder-Surfing)
 
-Run Ray with `-g` or `--stealth` when working in public spaces, offices, or libraries:
-- Answers stream in ultra-low-contrast dim gray text that blends into dark terminal backgrounds.
-- Virtually unreadable to anyone standing a couple of feet away or viewing from an angle.
-- Silent prompt with zero bright banners or borders.
-- Pressing `Ctrl+C` or exiting immediately blanks the screen clean.
+Run Ray with stealth flags when working in public spaces, offices, or libraries:
+- **`-g` (Stealth Text)**: Answers stream in ultra-low-contrast dim gray text with zero bright banners. Legible up close, virtually invisible to anyone standing a couple of feet away.
+- **`-G` (Ghost Window Injection)**: Injects 100% transparent glass (no frosted blur), hides the window from the taskbar, and enters fullscreen (`F11`) to eliminate all titlebars, tabs, and shadows!
+- **`--restore`**: Restores Windows Terminal window settings back to defaults.
 
 ```bash
+# Ghost window injection (100% transparent glass, fullscreen, hidden taskbar)
+ray -G
+
 # Stealth one-shot query
 ray -g "sql left join syntax"
 
-# Interactive stealth chat
-ray -g
+# Restore terminal settings
+ray --restore
 ```
 
 ---
@@ -142,6 +144,8 @@ ray -g
 | `ray <question>` | Stream instant answer for a question |
 | `ray` | Launch interactive REPL |
 | `ray -g, --stealth` | Stealth mode: low-contrast text, silent prompt, panic wipe |
+| `ray -G, --ghost` | Ghost mode: 100% transparent, fullscreen, hides taskbar |
+| `ray --restore` | Restore Windows Terminal settings to default |
 | `ray -s <question>` | Force shared password mode |
 | `ray --key <key>` | Set or update your personal Groq key |
 | `ray --model <name>` | Select model (default: `qwen/qwen3.8-27b`) |
