@@ -8,7 +8,7 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
-import { launchQuakeFullscreen, resetWindowsTerminalSettings } from '../src/window.js';
+import { launchQuakeFullscreen, resetWindowsTerminalSettings, hideFromTaskbar } from '../src/window.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +76,12 @@ async function main() {
   if (args.includes('--restore')) {
     resetWindowsTerminalSettings();
     console.log(green('ok: windows terminal settings restored to defaults'));
+    process.exit(0);
+  }
+
+  if (args.includes('--hide-taskbar')) {
+    hideFromTaskbar(true);
+    console.log(green('ok: windows terminal configured to hide from taskbar (system tray only)'));
     process.exit(0);
   }
 
