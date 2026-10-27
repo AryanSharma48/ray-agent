@@ -129,18 +129,18 @@ If you are publishing or sharing this package and want others to be able to use 
 
 Run Ray with stealth flags when working in public spaces, offices, or libraries:
 - **`-g` (Stealth Text)**: Answers stream in ultra-low-contrast dim gray text with zero bright banners. Legible up close, virtually invisible to anyone standing a couple of feet away.
-- **`-G` (Ghost Window Injection)**: Injects 100% transparent glass (no frosted blur), hides the window from the taskbar, and enters fullscreen (`F11`) to eliminate all titlebars, tabs, and shadows!
-- **`--restore`**: Restores Windows Terminal window settings back to defaults.
+- **`-G` (Ghost Window)**: Injects 100% transparent glass, hides the window from the taskbar, and renders with dim low-contrast text. Works in Windows Terminal and classic PowerShell/CMD.
+- **`--restore` / `-restore`**: Restores terminal window settings and opacity back to defaults.
 
 ```bash
-# Ghost window injection (100% transparent glass, fullscreen, hidden taskbar)
+# Ghost window (100% transparent glass + hidden taskbar)
 ray -G
 
 # Stealth one-shot query
 ray -g "sql left join syntax"
 
 # Restore terminal settings
-ray --restore
+ray -restore
 ```
 
 ---
@@ -152,8 +152,8 @@ ray --restore
 | `ray <question>` | Stream instant answer for a question |
 | `ray` | Launch interactive REPL |
 | `ray -g, --stealth` | Stealth mode: low-contrast text, silent prompt, panic wipe |
-| `ray -G, --ghost` | Ghost mode: 100% transparent, fullscreen, hides taskbar |
-| `ray --restore` | Restore Windows Terminal settings to default |
+| `ray -G, --ghost` | Ghost mode: 100% transparent glass + hidden taskbar |
+| `ray -restore` | Restore terminal settings and opacity to default |
 | `ray -s <question>` | Force shared password mode |
 | `ray --key <key>` | Set or update your personal Groq key |
 | `ray --model <name>` | Select model (default: `qwen/qwen3.8-27b`) |
@@ -163,6 +163,20 @@ ray --restore
 | `ray --help` | Show help and flags |
 
 ---
+
+## Uninstall
+
+To completely remove Ray:
+
+**Windows (PowerShell / Zero-Prereq Edition):**
+```powershell
+Remove-Item -Recurse -Force "$HOME\.ray-agent"
+```
+
+**npm / Node Edition:**
+```bash
+npm uninstall -g ray-agent
+```
 
 ## License
 MIT (c) Aryan Sharma

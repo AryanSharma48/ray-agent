@@ -10,6 +10,8 @@ param(
 
     [switch]$g,
     [switch]$stealth,
+    [switch]$ghost,
+    [switch]$restore,
     [switch]$s,
     [switch]$shared,
     [string]$SetKey,
@@ -37,7 +39,12 @@ STRICT RULES:
 
 $ConfigDir = "$HOME\.ray-agent"
 $ConfigFile = "$ConfigDir\config.json"
-$IsStealth = $g -or $stealth
+$WtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+
+# In PowerShell parameter names are case-insensitive, so both -g and -G map to $g unless checked case-sensitively
+$fullCmd = "$($MyInvocation.Line) $([Environment]::CommandLine)"
+$IsGhost = $ghost -or ($fullCmd -cmatch '(\s|^)-G(\s|$)')
+$IsStealth = ($g -and !$IsGhost) -or $stealth -or $IsGhost
 
 function Get-RayConfig {
     if (Test-Path $ConfigFile) {
@@ -55,6 +62,90 @@ function Save-RayConfig($cfg) {
     $cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigFile -Encoding UTF8
 }
 
+$WinApiSource = @"
+using System;
+using System.Runtime.InteropServices;
+public class RayWinGlass {
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetConsoleWindow();
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")]
+    public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")]
+    public static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+}
+"@
+
+function Set-ConsoleTransparency([byte]$alpha) {
+    try {
+        if (!([System.Management.Automation.PSTypeName]'RayWinGlass').Type) {
+            Add-Type -TypeDefinition $WinApiSource
+        }
+        $hwnd = [RayWinGlass]::GetConsoleWindow()
+        if ($hwnd -eq [IntPtr]::Zero) {
+            $hwnd = [RayWinGlass]::GetForegroundWindow()
+        }
+        if ($hwnd -ne [IntPtr]::Zero) {
+            $style = [RayWinGlass]::GetWindowLong($hwnd, -20)
+            if ($alpha -lt 255) {
+                [RayWinGlass]::SetWindowLong($hwnd, -20, $style -bor 0x00080000)
+                [RayWinGlass]::SetLayeredWindowAttributes($hwnd, 0, $alpha, 2)
+            } else {
+                [RayWinGlass]::SetLayeredWindowAttributes($hwnd, 0, 255, 2)
+                [RayWinGlass]::SetWindowLong($hwnd, -20, $style -band (-bnot 0x00080000))
+            }
+        }
+    } catch {}
+}
+
+function Apply-WindowInjection {
+    Set-ConsoleTransparency 35
+    if (Test-Path $WtSettingsPath) {
+        try {
+            $settings = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+            if (!$settings.profiles) {
+                $settings | Add-Member -MemberType NoteProperty -Name "profiles" -Value ([PSCustomObject]@{}) -Force
+            }
+            if (!$settings.profiles.defaults) {
+                $settings.profiles | Add-Member -MemberType NoteProperty -Name "defaults" -Value ([PSCustomObject]@{}) -Force
+            }
+
+            $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name "opacity" -Value 0 -Force
+            $settings.profiles.defaults | Add-Member -MemberType NoteProperty -Name "useAcrylic" -Value $false -Force
+            $settings | Add-Member -MemberType NoteProperty -Name "minimizeToNotificationArea" -Value $true -Force
+
+            $settings | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
+        } catch {}
+    }
+}
+
+function Restore-WindowInjection {
+    Set-ConsoleTransparency 255
+    if (Test-Path $WtSettingsPath) {
+        try {
+            $settings = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+            if ($settings.PSObject.Properties['minimizeToNotificationArea']) {
+                $settings.PSObject.Properties.Remove('minimizeToNotificationArea')
+            }
+            if ($settings.profiles.defaults) {
+                if ($settings.profiles.defaults.PSObject.Properties['opacity']) {
+                    $settings.profiles.defaults.PSObject.Properties.Remove('opacity')
+                }
+                if ($settings.profiles.defaults.PSObject.Properties['useAcrylic']) {
+                    $settings.profiles.defaults.PSObject.Properties.Remove('useAcrylic')
+                }
+            }
+            $settings | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
+            Write-Host "ok: terminal window and settings restored to defaults" -ForegroundColor Green
+        } catch {}
+    } else {
+        Write-Host "ok: console transparency restored to 100%" -ForegroundColor Green
+    }
+}
+
 function Show-Help {
     Write-Host @"
 
@@ -65,12 +156,15 @@ USAGE
   ray <question>                One-shot instant answer
   ray -s <question>             Force shared key mode
   ray -g <question>             Stealth text mode (subtle low-contrast text)
+  ray -G [question]             Ghost mode: 100% transparent glass + hidden taskbar
   <command> | ray [question]    Process piped terminal input
 
 OPTIONS
   -g, --stealth                 Stealth text mode (subtle low-contrast gray)
+  -G, --ghost                   Ghost mode: 100% transparent glass + hidden taskbar
+  -restore                      Restore Windows Terminal settings to default
   -s, --shared                  Use shared encrypted key
-  -key <key>                    Set your personal Groq API key
+  -SetKey <key>                 Set your personal Groq API key
   -model <name>                 Select model (default: qwen/qwen3.8-27b)
   -config                       Show configuration status
   -reset                        Clear saved local config
@@ -79,6 +173,7 @@ OPTIONS
 EXAMPLES
   ray "kill process on port 3000"
   ray -g "convert string to title case in python"
+  ray -G "sql left join syntax"
   git diff | ray "summarize changes"
 
 "@ -ForegroundColor Cyan
@@ -86,6 +181,11 @@ EXAMPLES
 
 if ($h -or $HelpFlag -or ($QueryArgs -contains "-h") -or ($QueryArgs -contains "--help") -or ($QueryArgs -contains "help")) {
     Show-Help
+    return
+}
+
+if ($restore) {
+    Restore-WindowInjection
     return
 }
 
@@ -134,7 +234,12 @@ if (!$ApiKey) {
     if (!$IsStealth) { Write-Host "ok: api key saved to ~/.ray-agent/config.json`n" -ForegroundColor Green }
 }
 
-# 2. Streaming Function
+# 2. Apply Ghost Mode (-G) window injection after key resolution
+if ($IsGhost) {
+    Apply-WindowInjection
+}
+
+# 3. Streaming Function
 function Stream-Groq([string]$query, [array]$history = @()) {
     $messages = @(
         @{ role = "system"; content = $SystemPrompt }
@@ -207,7 +312,7 @@ function Stream-Groq([string]$query, [array]$history = @()) {
 
 $FullQuery = ($QueryArgs -join " ").Trim()
 
-# 3. Detect Piped Input safely
+# 4. Detect Piped Input safely
 $PipedData = ""
 if (!$FullQuery) {
     try {
@@ -217,7 +322,7 @@ if (!$FullQuery) {
     } catch {}
 }
 
-# 4. One-Shot Query or Piped Execution
+# 5. One-Shot Query or Piped Execution
 if ($FullQuery -or $PipedData) {
     $prompt = $FullQuery
     if ($PipedData) {
@@ -227,7 +332,7 @@ if ($FullQuery -or $PipedData) {
     return
 }
 
-# 5. Interactive Chat (REPL)
+# 6. Interactive Chat (REPL)
 if (!$IsStealth) {
     Write-Host "`nray ($model) | :q to quit, :c to clear`n" -ForegroundColor Cyan
 }
