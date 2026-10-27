@@ -8,7 +8,6 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
-import { launchQuakeFullscreen, resetWindowsTerminalSettings, hideFromTaskbar } from '../src/window.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,13 +34,10 @@ ${bold('USAGE')}
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
   ${cyan('ray')} -g <question>             Stealth mode (subtle low-contrast text)
-  ${cyan('ray')} -G [question]             Ghost mode: hooks into Quake (Win + \`) & opens fullscreen
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
-  ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray)
-  ${cyan('-G, --ghost')}                   Ghost mode: launches Quake dropdown (Win + \`) in fullscreen
-  ${cyan('--restore')}                     Reset Windows Terminal settings back to default
+  ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray, silent prompt)
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
   ${cyan('--model')} <name>                Select model (default: qwen/qwen3.8-27b)
@@ -54,7 +50,7 @@ ${bold('OPTIONS')}
 ${bold('EXAMPLES')}
   ray "kill process on port 3000"
   ray -g "convert string to title case in python"
-  ray -G "sql left join syntax"
+  ray "sql left join syntax"
   git diff | ray "summarize changes"
 `);
 }
@@ -71,30 +67,6 @@ async function main() {
   if (args.includes('-v') || args.includes('--version')) {
     console.log(pkg.version);
     process.exit(0);
-  }
-
-  if (args.includes('--restore')) {
-    resetWindowsTerminalSettings();
-    console.log(green('ok: windows terminal settings restored to defaults'));
-    process.exit(0);
-  }
-
-  if (args.includes('--hide-taskbar')) {
-    hideFromTaskbar(true);
-    console.log(green('ok: windows terminal configured to hide from taskbar (system tray only)'));
-    process.exit(0);
-  }
-
-  // Ghost mode (-G) or Quake flag: hook into Quake window (Win + `) and fullscreen natively
-  const isGhostTrigger = args.includes('-G') || args.includes('--ghost') || args.includes('-q') || args.includes('--quake');
-  const alreadyInQuake = args.includes('--in-quake');
-
-  if (isGhostTrigger && !alreadyInQuake) {
-    const remainingArgs = args.filter(a => a !== '-G' && a !== '--ghost' && a !== '-q' && a !== '--quake');
-    const launched = launchQuakeFullscreen(['--in-quake', ...remainingArgs]);
-    if (launched) {
-      process.exit(0);
-    }
   }
 
   if (args.includes('--setup-shared')) {
@@ -140,12 +112,10 @@ async function main() {
   }
 
   // Stealth flag
-  const isStealth = args.includes('-g') || args.includes('--stealth') || alreadyInQuake || readConfig().stealth === true;
+  const isStealth = args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
   const filteredArgs = args.filter(a =>
     a !== '-s' && a !== '--shared' &&
-    a !== '-g' && a !== '--stealth' &&
-    a !== '-G' && a !== '--ghost' &&
-    a !== '--in-quake'
+    a !== '-g' && a !== '--stealth'
   );
 
   // Shared flag

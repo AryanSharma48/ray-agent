@@ -117,23 +117,20 @@ If you are publishing or sharing this package and want others to be able to use 
 
 ---
 
-## Stealth & Ghost Mode (Anti-Shoulder-Surfing)
+## Stealth Mode (Anti-Shoulder-Surfing)
 
-Run Ray with stealth flags when working in public spaces, offices, or libraries:
-- **`-g` (Stealth Text)**: Answers stream in ultra-low-contrast dim gray text that blends into dark terminal backgrounds. Virtually unreadable to anyone standing a couple of feet away or viewing from an angle.
-- **`-G` (Ghost Mode)**: Combines stealth text + auto-fullscreen (`F11`) + auto-dim (35% opacity with acrylic blur). Eliminates all titlebars, tabs, borders, and shadows completely!
-- **`-q` (Quake Dropdown)**: Launches Ray inside the borderless Windows Terminal dropdown (`Win + \``).
-- **`--dim` / `--undim`**: Sets Windows Terminal to 35% opacity + acrylic frosted glass.
+Run Ray with `-g` or `--stealth` when working in public spaces, offices, or libraries:
+- Answers stream in ultra-low-contrast dim gray text that blends into dark terminal backgrounds.
+- Virtually unreadable to anyone standing a couple of feet away or viewing from an angle.
+- Silent prompt with zero bright banners or borders.
+- Pressing `Ctrl+C` or exiting immediately blanks the screen clean.
 
 ```bash
-# Ghost mode: stealth text + no titlebar/borders + 35% glass
-ray -G
-
-# Quake dropdown mode (Win + `)
-ray -q
-
 # Stealth one-shot query
 ray -g "sql left join syntax"
+
+# Interactive stealth chat
+ray -g
 ```
 
 ---
@@ -144,12 +141,7 @@ ray -g "sql left join syntax"
 | :--- | :--- |
 | `ray <question>` | Stream instant answer for a question |
 | `ray` | Launch interactive REPL |
-| `ray -g, --stealth` | Stealth text: low-contrast text, silent prompt, panic wipe |
-| `ray -G, --ghost` | Ghost mode: stealth + auto-fullscreen + 35% dim acrylic glass |
-| `ray -q, --quake` | Launch inside Windows Terminal Quake dropdown (Win + \`) |
-| `ray --fs` | Toggle fullscreen (F11) to hide borders & shadows |
-| `ray --dim` | Set Windows Terminal opacity to 35% with acrylic blur |
-| `ray --undim` | Restore Windows Terminal opacity to default |
+| `ray -g, --stealth` | Stealth mode: low-contrast text, silent prompt, panic wipe |
 | `ray -s <question>` | Force shared password mode |
 | `ray --key <key>` | Set or update your personal Groq key |
 | `ray --model <name>` | Select model (default: `qwen/qwen3.8-27b`) |
