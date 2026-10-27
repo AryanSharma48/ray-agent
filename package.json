@@ -1,0 +1,30 @@
+{
+  "name": "ray-agent",
+  "version": "1.0.0",
+  "description": "Ultra-fast, zero-bloat AI CLI assistant powered by Groq",
+  "main": "bin/cli.js",
+  "type": "module",
+  "bin": {
+    "ray": "./bin/cli.js",
+    "ray-agent": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node ./bin/cli.js",
+    "test": "node ./test/test.js",
+    "encrypt": "node ./bin/cli.js --setup-shared"
+  },
+  "keywords": [
+    "cli",
+    "groq",
+    "ai",
+    "terminal",
+    "assistant",
+    "ultra-fast",
+    "minimal"
+  ],
+  "author": "Aryan Sharma",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
