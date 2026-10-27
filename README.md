@@ -115,15 +115,34 @@ If you are publishing or sharing this package and want others to be able to use 
 
 ---
 
+---
+
+## Stealth Mode (Anti-Shoulder-Surfing)
+
+Run Ray with `-g` or `--stealth` when working in public spaces, offices, or libraries:
+- Answers stream in ultra-low-contrast dim gray text that blends into dark terminal backgrounds.
+- Virtually unreadable to anyone standing a couple of feet away or viewing from an angle.
+- Silent prompt with zero bright banners or borders.
+- Pressing `Ctrl+C` or exiting immediately blanks the screen clean.
+
+```bash
+ray -g "write a script to scrape product prices"
+# or interactive stealth chat
+ray -g
+```
+
+---
+
 ## CLI Options
 
 | Command | Description |
 | :--- | :--- |
 | `ray <question>` | Stream instant answer for a question |
 | `ray` | Launch interactive REPL |
+| `ray -g, --stealth` | Stealth mode: low-contrast text, silent prompt, panic wipe |
 | `ray -s <question>` | Force shared password mode |
 | `ray --key <key>` | Set or update your personal Groq key |
-| `ray --model <name>` | Select model (default: `llama-3.1-8b-instant`) |
+| `ray --model <name>` | Select model (default: `qwen/qwen3.8-27b`) |
 | `ray --config` | View current config and key status |
 | `ray --reset` | Clear stored config in `~/.ray-agent/` |
 | `ray --setup-shared` | Encrypt and bundle a shared key |

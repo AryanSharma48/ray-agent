@@ -1,4 +1,4 @@
-import { cyan, green, yellow, gray, bold, dim, magenta, stripAnsi } from './colors.js';
+import { cyan, green, yellow, gray, bold, dim, magenta, stealthColor } from './colors.js';
 
 // Syntax highlighting patterns for popular languages
 const KEYWORDS = new Set([
@@ -7,7 +7,8 @@ const KEYWORDS = new Set([
   'catch', 'finally', 'throw', 'new', 'typeof', 'instanceof', 'void', 'delete', 'null', 'undefined',
   'true', 'false', 'def', 'elif', 'import', 'as', 'pass', 'with', 'yield', 'lambda', 'fn', 'mut',
   'pub', 'impl', 'struct', 'enum', 'trait', 'type', 'where', 'match', 'use', 'crate', 'self',
-  'package', 'func', 'go', 'select', 'chan', 'defer', 'interface', 'map', 'range'
+  'package', 'func', 'go', 'select', 'chan', 'defer', 'interface', 'map', 'range', 'SELECT', 'FROM',
+  'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'GROUP', 'BY', 'ORDER', 'LIMIT'
 ]);
 
 function highlightLine(line) {
@@ -24,7 +25,7 @@ function highlightLine(line) {
 
   // Highlight keywords
   formatted = formatted.replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g, (match) => {
-    if (KEYWORDS.has(match)) {
+    if (KEYWORDS.has(match) || KEYWORDS.has(match.toUpperCase())) {
       return magenta(match);
     }
     return match;
@@ -34,9 +35,10 @@ function highlightLine(line) {
 }
 
 /**
- * Creates a stream renderer that handles markdown code blocks and syntax highlighting
+ * Creates a stream renderer that handles markdown code blocks and syntax highlighting.
+ * If stealth is enabled, output is rendered in dim, low-contrast text without borders.
  */
-export function createStreamRenderer(isTTY = process.stdout.isTTY) {
+export function createStreamRenderer({ isTTY = process.stdout.isTTY, stealth = false } = {}) {
   let inCodeBlock = false;
   let codeLang = '';
   let lineBuffer = '';
@@ -59,16 +61,32 @@ export function createStreamRenderer(isTTY = process.stdout.isTTY) {
           if (!inCodeBlock) {
             inCodeBlock = true;
             codeLang = line.slice(3).trim();
-            const tag = codeLang ? ` ${codeLang.toUpperCase()} ` : ' CODE ';
-            process.stdout.write(`\n${dim('┌─')} ${cyan(bold(tag))}\n`);
+            if (!stealth) {
+              const tag = codeLang ? ` ${codeLang.toUpperCase()} ` : ' CODE ';
+              process.stdout.write(`\n${dim('---')} ${cyan(bold(tag))}\n`);
+            } else {
+              process.stdout.write('\n');
+            }
           } else {
             inCodeBlock = false;
-            process.stdout.write(`${dim('└────────────────────────────')}\n`);
+            if (!stealth) {
+              process.stdout.write(`${dim('----------------------------')}\n`);
+            } else {
+              process.stdout.write('\n');
+            }
           }
         } else if (inCodeBlock) {
-          process.stdout.write(`${dim('│')} ${highlightLine(line)}\n`);
+          if (stealth) {
+            process.stdout.write(`${stealthColor(line)}\n`);
+          } else {
+            process.stdout.write(`  ${highlightLine(line)}\n`);
+          }
         } else {
-          process.stdout.write(`${line}\n`);
+          if (stealth) {
+            process.stdout.write(`${stealthColor(line)}\n`);
+          } else {
+            process.stdout.write(`${line}\n`);
+          }
         }
       }
     },
@@ -77,9 +95,11 @@ export function createStreamRenderer(isTTY = process.stdout.isTTY) {
       if (lineBuffer.length > 0) {
         if (!isTTY) {
           process.stdout.write(lineBuffer);
+        } else if (stealth) {
+          process.stdout.write(`${stealthColor(lineBuffer)}\n`);
         } else if (inCodeBlock) {
-          process.stdout.write(`${dim('│')} ${highlightLine(lineBuffer)}\n`);
-          process.stdout.write(`${dim('└────────────────────────────')}\n`);
+          process.stdout.write(`  ${highlightLine(lineBuffer)}\n`);
+          process.stdout.write(`${dim('----------------------------')}\n`);
         } else {
           process.stdout.write(`${lineBuffer}\n`);
         }

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cyan, bold, dim, yellow, green, red, gray } from '../src/colors.js';
+import { cyan, bold, dim, green, red, gray, stealthColor } from '../src/colors.js';
 import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL } from '../src/config.js';
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
@@ -33,13 +33,15 @@ ${bold('USAGE')}
   ${cyan('ray')}                           Start interactive chat (REPL)
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
+  ${cyan('ray')} -g <question>             Stealth mode (low-contrast, anti-shoulder-surfing)
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
+  ${cyan('-g, --stealth')}                 Stealth mode: subtle low-contrast text, silent prompt
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
-  ${cyan('--model')} <name>                Select model (default: llama-3.1-8b-instant)
-  ${cyan('--setup-shared')}                Encrypt & bundle a shared key (admin/creator)
+  ${cyan('--model')} <name>                Select model (default: qwen/qwen3.8-27b)
+  ${cyan('--setup-shared')}                Encrypt & bundle a shared key
   ${cyan('--config')}                      Show current configuration status
   ${cyan('--reset')}                       Clear saved local config
   ${cyan('-h, --help')}                    Display this help message
@@ -47,7 +49,7 @@ ${bold('OPTIONS')}
 
 ${bold('EXAMPLES')}
   ray "kill process on port 3000"
-  ray "convert string to title case in python"
+  ray -g "convert string to title case in python"
   git diff | ray "summarize changes"
   cat error.log | ray "explain error"
 `);
@@ -74,17 +76,18 @@ async function main() {
 
   if (args.includes('--reset')) {
     writeConfig({ apiKey: null, useShared: false });
-    console.log(green('✔ Configuration reset.'));
+    console.log(green('ok: configuration reset'));
     process.exit(0);
   }
 
   if (args.includes('--config')) {
     const config = readConfig();
-    console.log(`\n${cyan(bold('⚡ Ray Configuration'))}`);
-    console.log(`Config file:  ~/.ray-agent/config.json`);
-    console.log(`Model:        ${config.model || DEFAULT_MODEL}`);
-    console.log(`Shared Key:   ${config.useShared ? green('Enabled') : dim('Disabled')}`);
-    console.log(`Personal Key: ${config.apiKey ? green('Configured (' + config.apiKey.slice(0, 8) + '...)') : dim('None')}\n`);
+    console.log(`\n${cyan(bold('ray configuration'))}`);
+    console.log(`config file:  ~/.ray-agent/config.json`);
+    console.log(`model:        ${config.model || DEFAULT_MODEL}`);
+    console.log(`stealth:      ${config.stealth ? green('enabled') : dim('disabled')}`);
+    console.log(`shared key:   ${config.useShared ? green('enabled') : dim('disabled')}`);
+    console.log(`personal key: ${config.apiKey ? green('configured (' + config.apiKey.slice(0, 8) + '...)') : dim('none')}\n`);
     process.exit(0);
   }
 
@@ -93,7 +96,7 @@ async function main() {
   if (keyIdx !== -1 && args[keyIdx + 1]) {
     const newKey = args[keyIdx + 1];
     writeConfig({ apiKey: newKey, useShared: false });
-    console.log(green('✔ Personal Groq API key saved.\n'));
+    console.log(green('ok: personal groq api key saved\n'));
     args.splice(keyIdx, 2);
   }
 
@@ -108,15 +111,18 @@ async function main() {
     if (config.model) chosenModel = config.model;
   }
 
+  // Stealth flag
+  const isStealth = args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
+  const filteredArgs = args.filter(a => a !== '-s' && a !== '--shared' && a !== '-g' && a !== '--stealth');
+
   // Shared flag
   const forceShared = args.includes('-s') || args.includes('--shared');
-  const filteredArgs = args.filter(a => a !== '-s' && a !== '--shared');
 
   // Check stdin for piped data
   const stdinData = await readStdin();
 
   // Resolve API Key
-  const apiKey = await resolveApiKey({ forceShared });
+  const apiKey = await resolveApiKey({ forceShared, silent: isStealth });
 
   // Query construction
   const query = filteredArgs.join(' ').trim();
@@ -128,7 +134,7 @@ async function main() {
       promptContent = query ? `${query}:\n\n${stdinData}` : stdinData;
     }
 
-    const renderer = createStreamRenderer();
+    const renderer = createStreamRenderer({ isTTY: process.stdout.isTTY, stealth: isStealth });
     try {
       await streamChat({
         apiKey,
@@ -139,17 +145,21 @@ async function main() {
       renderer.flush();
       if (process.stdout.isTTY) process.stdout.write('\n');
     } catch (err) {
-      console.error(`\n${red('Error:')} ${err.message}`);
+      if (!isStealth) {
+        console.error(`\n${red('error:')} ${err.message}`);
+      } else {
+        console.error(`\n${stealthColor(`error: ${err.message}`)}`);
+      }
       process.exit(1);
     }
     return;
   }
 
   // Otherwise, start interactive REPL
-  await startRepl({ apiKey, model: chosenModel });
+  await startRepl({ apiKey, model: chosenModel, stealth: isStealth });
 }
 
 main().catch((err) => {
-  console.error(`\n${red('Fatal:')} ${err.message}`);
+  console.error(`\nfatal: ${err.message}`);
   process.exit(1);
 });

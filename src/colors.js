@@ -17,7 +17,13 @@ export const cyan = c(36, 39);
 export const gray = c(90, 39);
 export const white = c(37, 39);
 
-export const bgCyan = c(46, 49);
-export const bgMagenta = c(45, 49);
+// Stealth text: dim low-contrast gray, virtually invisible from distance/angle
+export const stealthColor = (str = '') => (enabled ? `\x1b[2;90m${str}\x1b[0m` : String(str));
+
+export const clearScreen = () => {
+  if (process.stdout.isTTY) {
+    process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+  }
+};
 
 export const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*m/g, '');
