@@ -32,7 +32,7 @@ if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
 }
 
 # 3. Create the global ray.cmd launcher (so 'ray' works in CMD, PowerShell, and Terminal)
-$cmdContent = "@echo off`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0ray.ps1`" %*"
+$cmdContent = "@echo off`r`nsetlocal`r`nset `"SCRIPT_PATH=%~dp0ray.ps1`"`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%SCRIPT_PATH%`" %*`r`nendlocal"
 Set-Content -Path $CmdPath -Value $cmdContent -Encoding ASCII
 
 # 4. Optional: compile a 25 KB native ray.exe using Windows' built-in csc.exe if available

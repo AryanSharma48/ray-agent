@@ -23,7 +23,7 @@
 Paste this single line into Windows PowerShell (works on any Windows 10/11 machine out of the box):
 
 ```powershell
-irm https://raw.githubusercontent.com/aryansharma48/ray-agent/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/aryansharma48/ray-agent/main/install.ps1 | Out-String | iex
 ```
 
 ### Method 2: Via npm (macOS, Linux, Windows with Node.js)
