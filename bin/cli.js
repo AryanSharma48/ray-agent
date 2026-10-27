@@ -8,7 +8,7 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
-import { toggleFullscreen, setWindowsTerminalDim, launchQuake } from '../src/window.js';
+import { toggleFullscreen, setWindowsTerminalTransparent, launchQuake } from '../src/window.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,16 +35,16 @@ ${bold('USAGE')}
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
   ${cyan('ray')} -g <question>             Stealth mode (low-contrast text)
-  ${cyan('ray')} -G <question>             Ghost mode: stealth + auto-fullscreen + dimmest glass
+  ${cyan('ray')} -G <question>             Ghost mode: stealth text + 100% transparent glass + auto-fullscreen
   ${cyan('ray')} -q [question]             Launch inside borderless Quake dropdown (Win + \`)
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
   ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray)
-  ${cyan('-G, --ghost')}                   Ghost mode (stealth text + auto-fullscreen + dimmest glass)
+  ${cyan('-G, --ghost')}                   Ghost mode (stealth text + 100% transparent glass + auto-fullscreen)
   ${cyan('-q, --quake')}                   Launch inside Windows Quake dropdown window
   ${cyan('--fs')}                          Toggle fullscreen (F11) to hide borders & shadows
-  ${cyan('--dim')}                         Set Windows Terminal to 35% opacity + acrylic blur
+  ${cyan('--dim')}                         Set Windows Terminal to 100% transparent (no frost)
   ${cyan('--undim')}                       Restore Windows Terminal opacity to default
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
@@ -79,13 +79,13 @@ async function main() {
   }
 
   if (args.includes('--dim')) {
-    setWindowsTerminalDim(true);
-    console.log(green('ok: windows terminal opacity set to 35% with acrylic blur'));
+    setWindowsTerminalTransparent(true);
+    console.log(green('ok: windows terminal set to 100% transparent (no frosted blur)'));
     process.exit(0);
   }
 
   if (args.includes('--undim')) {
-    setWindowsTerminalDim(false);
+    setWindowsTerminalTransparent(false);
     console.log(green('ok: windows terminal opacity restored to default'));
     process.exit(0);
   }
@@ -120,22 +120,10 @@ async function main() {
     process.exit(0);
   }
 
-  // Ghost mode (-G) combines stealth + dim + fullscreen
+  // Ghost mode flags
   const isGhost = args.includes('-G') || args.includes('--ghost');
   const wantFullscreen = isGhost || args.includes('--fs');
-  const wantDim = isGhost || args.includes('--dim');
-
-  if (wantDim) {
-    setWindowsTerminalDim(true);
-  }
-
-  if (wantFullscreen) {
-    toggleFullscreen();
-    process.on('exit', () => {
-      // restore on exit if fullscreen was toggled
-      toggleFullscreen();
-    });
-  }
+  const wantTransparent = isGhost || args.includes('--dim');
 
   // Key flag
   const keyIdx = args.findIndex(a => a === '--key');
@@ -163,7 +151,7 @@ async function main() {
     a !== '-s' && a !== '--shared' &&
     a !== '-g' && a !== '--stealth' &&
     a !== '-G' && a !== '--ghost' &&
-    a !== '--fs'
+    a !== '--fs' && a !== '--dim'
   );
 
   // Shared flag
@@ -172,8 +160,23 @@ async function main() {
   // Check stdin for piped data
   const stdinData = await readStdin();
 
-  // Resolve API Key
+  // Resolve API Key FIRST so user inputs password cleanly without keystroke collisions
   const apiKey = await resolveApiKey({ forceShared, silent: isStealth });
+
+  // Apply transparency and fullscreen AFTER password input is complete
+  if (wantTransparent) {
+    setWindowsTerminalTransparent(true);
+  }
+
+  if (wantFullscreen) {
+    setTimeout(() => {
+      toggleFullscreen();
+    }, 120);
+
+    process.on('exit', () => {
+      toggleFullscreen();
+    });
+  }
 
   // Query construction
   const query = filteredArgs.join(' ').trim();
