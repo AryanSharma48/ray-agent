@@ -8,7 +8,7 @@ import { loadBundledSecret, decryptApiKey, saveBundledSecret, encryptApiKey } fr
 const CONFIG_DIR = path.join(os.homedir(), '.ray-agent');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
-export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+export const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
 
 export function readConfig() {
   try {

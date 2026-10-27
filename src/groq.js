@@ -50,6 +50,17 @@ export async function streamChat({
     } catch {
       errorDetail = await res.text();
     }
+
+    // Smart fallback if the requested model is retired or not on this account
+    if (res.status === 404 && model !== 'qwen/qwen3.8-27b') {
+      return streamChat({
+        apiKey,
+        model: 'qwen/qwen3.8-27b',
+        messages,
+        onChunk
+      });
+    }
+
     throw new Error(`Groq API error (${res.status}): ${errorDetail}`);
   }
 
