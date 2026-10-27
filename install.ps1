@@ -7,7 +7,6 @@ $ProgressPreference = 'SilentlyContinue'
 $InstallDir = "$HOME\.ray-agent\bin"
 $PsScriptPath = "$InstallDir\ray.ps1"
 $CmdPath = "$InstallDir\ray.cmd"
-$ExePath = "$InstallDir\ray.exe"
 
 $Repo = "aryansharma48/ray-agent"
 $ScriptUrl = "https://raw.githubusercontent.com/$Repo/main/ray.ps1"
@@ -35,33 +34,12 @@ if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
 $cmdContent = "@echo off`r`nsetlocal`r`nset `"SCRIPT_PATH=%~dp0ray.ps1`"`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%SCRIPT_PATH%`" %*`r`nendlocal"
 Set-Content -Path $CmdPath -Value $cmdContent -Encoding ASCII
 
-# 4. Optional: compile a 25 KB native ray.exe using Windows' built-in csc.exe if available
-$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-if (Test-Path $csc) {
-    $csharpCode = @"
-using System;
-using System.Diagnostics;
-class Program {
-    static int Main(string[] args) {
-        string dir = AppDomain.CurrentDomain.BaseDirectory;
-        string ps1 = System.IO.Path.Combine(dir, "ray.ps1");
-        string argList = "-NoProfile -ExecutionPolicy Bypass -File \"" + ps1 + "\" " + string.Join(" ", args);
-        ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", argList) {
-            UseShellExecute = false
-        };
-        Process p = Process.Start(psi);
-        p.WaitForExit();
-        return p.ExitCode;
-    }
-}
-"@
-    $csFile = "$InstallDir\ray.cs"
-    Set-Content -Path $csFile -Value $csharpCode -Encoding UTF8
-    & $csc /nologo /optimize /target:exe /out:"$ExePath" "$csFile" | Out-Null
-    if (Test-Path $csFile) { Remove-Item $csFile -Force }
+# Clean up any legacy dynamically-compiled ray.exe that triggers Defender heuristics
+if (Test-Path "$InstallDir\ray.exe") {
+    try { Remove-Item "$InstallDir\ray.exe" -Force } catch {}
 }
 
-# 5. Add to user PATH permanently if not already present
+# 4. Add to user PATH permanently if not already present
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notmatch [regex]::Escape($InstallDir)) {
     $NewPath = if ($UserPath -and !$UserPath.EndsWith(";")) { "$UserPath;$InstallDir" } else { "$UserPath$InstallDir" }

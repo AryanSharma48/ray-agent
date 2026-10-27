@@ -20,10 +20,14 @@
 
 ### Method 1: Windows (No Node.js or npm required)
 
-Paste this single line into Windows PowerShell (works on any Windows 10/11 machine out of the box):
-
+**In PowerShell:**
 ```powershell
 irm https://raw.githubusercontent.com/aryansharma48/ray-agent/main/install.ps1 | Out-String | iex
+```
+
+**In Command Prompt (CMD):**
+```cmd
+curl -fsSL https://raw.githubusercontent.com/aryansharma48/ray-agent/main/install.ps1 -o "%TEMP%\install.ps1" && powershell -ExecutionPolicy Bypass -File "%TEMP%\install.ps1"
 ```
 
 ### Method 2: Via npm (macOS, Linux, Windows with Node.js)
