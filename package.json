@@ -1,6 +1,6 @@
 {
   "name": "ray-agent",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Ultra-fast, zero-bloat AI CLI assistant powered by Groq",
   "main": "bin/cli.js",
   "type": "module",
