@@ -2,6 +2,8 @@
 # Usage: irm https://raw.githubusercontent.com/aryansharma48/ray-agent/main/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
+# Crucial: Disable PowerShell's slow progress bar which throttles download speed by 20x
+$ProgressPreference = 'SilentlyContinue'
 
 $InstallDir = "$HOME\.ray-agent\bin"
 $ExePath = "$InstallDir\ray.exe"
@@ -16,27 +18,36 @@ if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-# 2. Download standalone executable
+# 2. Download standalone executable at maximum network speed
 Write-Host "Downloading standalone binary..." -ForegroundColor Gray
 
 $downloadSuccess = $false
 try {
-    # Use TLS 1.2+
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-    
-    # Download binary
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath -UseBasicParsing
-    $downloadSuccess = $true
+
+    # Fast path: Use Windows built-in curl.exe if available (super fast, full bandwidth)
+    if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+        & curl.exe -fSL $DownloadUrl -o $ExePath --progress-bar
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $ExePath)) {
+            $downloadSuccess = $true
+        }
+    }
+
+    # Fallback to .NET WebClient (much faster than Invoke-WebRequest)
+    if (!$downloadSuccess) {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($DownloadUrl, $ExePath)
+        $downloadSuccess = $true
+    }
 } catch {
     # If GitHub release asset is not yet available, check if node/npm is available as fallback
     if (Get-Command npm -ErrorAction SilentlyContinue) {
-        Write-Host "Binary not found in latest release, installing via npm..." -ForegroundColor Yellow
+        Write-Host "Binary not found in release, falling back to npm..." -ForegroundColor Yellow
         & npm install -g ray-agent
-        Write-Host "`nRay installed successfully via npm! Run 'ray --help' to get started." -ForegroundColor Green
+        Write-Host "`nok: Ray installed successfully via npm! Run 'ray --help' to get started." -ForegroundColor Green
         return
     } else {
         Write-Host "error: Failed to download ray binary from $DownloadUrl" -ForegroundColor Red
-        Write-Host "Please ensure a release is published on GitHub or try again later." -ForegroundColor Yellow
         exit 1
     }
 }
