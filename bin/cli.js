@@ -8,6 +8,7 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
+import { toggleFullscreen, setWindowsTerminalDim, launchQuake } from '../src/window.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,11 +34,18 @@ ${bold('USAGE')}
   ${cyan('ray')}                           Start interactive chat (REPL)
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
-  ${cyan('ray')} -g <question>             Stealth mode (low-contrast, anti-shoulder-surfing)
+  ${cyan('ray')} -g <question>             Stealth mode (low-contrast text)
+  ${cyan('ray')} -G <question>             Ghost mode: stealth + auto-fullscreen + dimmest glass
+  ${cyan('ray')} -q [question]             Launch inside borderless Quake dropdown (Win + \`)
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
-  ${cyan('-g, --stealth')}                 Stealth mode: subtle low-contrast text, silent prompt
+  ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray)
+  ${cyan('-G, --ghost')}                   Ghost mode (stealth text + auto-fullscreen + dimmest glass)
+  ${cyan('-q, --quake')}                   Launch inside Windows Quake dropdown window
+  ${cyan('--fs')}                          Toggle fullscreen (F11) to hide borders & shadows
+  ${cyan('--dim')}                         Set Windows Terminal to 35% opacity + acrylic blur
+  ${cyan('--undim')}                       Restore Windows Terminal opacity to default
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
   ${cyan('--model')} <name>                Select model (default: qwen/qwen3.8-27b)
@@ -50,8 +58,9 @@ ${bold('OPTIONS')}
 ${bold('EXAMPLES')}
   ray "kill process on port 3000"
   ray -g "convert string to title case in python"
+  ray -G "sql left join syntax"
+  ray -q
   git diff | ray "summarize changes"
-  cat error.log | ray "explain error"
 `);
 }
 
@@ -67,6 +76,26 @@ async function main() {
   if (args.includes('-v') || args.includes('--version')) {
     console.log(pkg.version);
     process.exit(0);
+  }
+
+  if (args.includes('--dim')) {
+    setWindowsTerminalDim(true);
+    console.log(green('ok: windows terminal opacity set to 35% with acrylic blur'));
+    process.exit(0);
+  }
+
+  if (args.includes('--undim')) {
+    setWindowsTerminalDim(false);
+    console.log(green('ok: windows terminal opacity restored to default'));
+    process.exit(0);
+  }
+
+  if (args.includes('-q') || args.includes('--quake')) {
+    const remainingArgs = args.filter(a => a !== '-q' && a !== '--quake');
+    const launched = launchQuake(['-g', ...remainingArgs]);
+    if (launched) {
+      process.exit(0);
+    }
   }
 
   if (args.includes('--setup-shared')) {
@@ -91,6 +120,23 @@ async function main() {
     process.exit(0);
   }
 
+  // Ghost mode (-G) combines stealth + dim + fullscreen
+  const isGhost = args.includes('-G') || args.includes('--ghost');
+  const wantFullscreen = isGhost || args.includes('--fs');
+  const wantDim = isGhost || args.includes('--dim');
+
+  if (wantDim) {
+    setWindowsTerminalDim(true);
+  }
+
+  if (wantFullscreen) {
+    toggleFullscreen();
+    process.on('exit', () => {
+      // restore on exit if fullscreen was toggled
+      toggleFullscreen();
+    });
+  }
+
   // Key flag
   const keyIdx = args.findIndex(a => a === '--key');
   if (keyIdx !== -1 && args[keyIdx + 1]) {
@@ -112,8 +158,13 @@ async function main() {
   }
 
   // Stealth flag
-  const isStealth = args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
-  const filteredArgs = args.filter(a => a !== '-s' && a !== '--shared' && a !== '-g' && a !== '--stealth');
+  const isStealth = isGhost || args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
+  const filteredArgs = args.filter(a =>
+    a !== '-s' && a !== '--shared' &&
+    a !== '-g' && a !== '--stealth' &&
+    a !== '-G' && a !== '--ghost' &&
+    a !== '--fs'
+  );
 
   // Shared flag
   const forceShared = args.includes('-s') || args.includes('--shared');
