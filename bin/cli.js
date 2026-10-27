@@ -8,7 +8,7 @@ import { resolveApiKey, readConfig, writeConfig, setupSharedKey, DEFAULT_MODEL }
 import { streamChat } from '../src/groq.js';
 import { createStreamRenderer } from '../src/formatter.js';
 import { startRepl } from '../src/repl.js';
-import { toggleFullscreen, setWindowsTerminalTransparent, launchQuake } from '../src/window.js';
+import { launchQuakeFullscreen, resetWindowsTerminalSettings } from '../src/window.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,18 +34,14 @@ ${bold('USAGE')}
   ${cyan('ray')}                           Start interactive chat (REPL)
   ${cyan('ray')} <question>                One-shot instant answer
   ${cyan('ray')} -s <question>             Force shared key mode
-  ${cyan('ray')} -g <question>             Stealth mode (low-contrast text)
-  ${cyan('ray')} -G <question>             Ghost mode: stealth text + 100% transparent glass + auto-fullscreen
-  ${cyan('ray')} -q [question]             Launch inside borderless Quake dropdown (Win + \`)
+  ${cyan('ray')} -g <question>             Stealth mode (subtle low-contrast text)
+  ${cyan('ray')} -G [question]             Ghost mode: hooks into Quake (Win + \`) & opens fullscreen
   <command> | ${cyan('ray')} [question]    Process piped terminal input
 
 ${bold('OPTIONS')}
   ${cyan('-g, --stealth')}                 Stealth text mode (subtle low-contrast gray)
-  ${cyan('-G, --ghost')}                   Ghost mode (stealth text + 100% transparent glass + auto-fullscreen)
-  ${cyan('-q, --quake')}                   Launch inside Windows Quake dropdown window
-  ${cyan('--fs')}                          Toggle fullscreen (F11) to hide borders & shadows
-  ${cyan('--dim')}                         Set Windows Terminal to 100% transparent (no frost)
-  ${cyan('--undim')}                       Restore Windows Terminal opacity to default
+  ${cyan('-G, --ghost')}                   Ghost mode: launches Quake dropdown (Win + \`) in fullscreen
+  ${cyan('--restore')}                     Reset Windows Terminal settings back to default
   ${cyan('-s, --shared')}                  Use shared encrypted key
   ${cyan('--key')} <key>                   Set your personal Groq API key
   ${cyan('--model')} <name>                Select model (default: qwen/qwen3.8-27b)
@@ -59,7 +55,6 @@ ${bold('EXAMPLES')}
   ray "kill process on port 3000"
   ray -g "convert string to title case in python"
   ray -G "sql left join syntax"
-  ray -q
   git diff | ray "summarize changes"
 `);
 }
@@ -78,21 +73,19 @@ async function main() {
     process.exit(0);
   }
 
-  if (args.includes('--dim')) {
-    setWindowsTerminalTransparent(true);
-    console.log(green('ok: windows terminal set to 100% transparent (no frosted blur)'));
+  if (args.includes('--restore')) {
+    resetWindowsTerminalSettings();
+    console.log(green('ok: windows terminal settings restored to defaults'));
     process.exit(0);
   }
 
-  if (args.includes('--undim')) {
-    setWindowsTerminalTransparent(false);
-    console.log(green('ok: windows terminal opacity restored to default'));
-    process.exit(0);
-  }
+  // Ghost mode (-G) or Quake flag: hook into Quake window (Win + `) and fullscreen natively
+  const isGhostTrigger = args.includes('-G') || args.includes('--ghost') || args.includes('-q') || args.includes('--quake');
+  const alreadyInQuake = args.includes('--in-quake');
 
-  if (args.includes('-q') || args.includes('--quake')) {
-    const remainingArgs = args.filter(a => a !== '-q' && a !== '--quake');
-    const launched = launchQuake(['-g', ...remainingArgs]);
+  if (isGhostTrigger && !alreadyInQuake) {
+    const remainingArgs = args.filter(a => a !== '-G' && a !== '--ghost' && a !== '-q' && a !== '--quake');
+    const launched = launchQuakeFullscreen(['--in-quake', ...remainingArgs]);
     if (launched) {
       process.exit(0);
     }
@@ -120,11 +113,6 @@ async function main() {
     process.exit(0);
   }
 
-  // Ghost mode flags
-  const isGhost = args.includes('-G') || args.includes('--ghost');
-  const wantFullscreen = isGhost || args.includes('--fs');
-  const wantTransparent = isGhost || args.includes('--dim');
-
   // Key flag
   const keyIdx = args.findIndex(a => a === '--key');
   if (keyIdx !== -1 && args[keyIdx + 1]) {
@@ -146,12 +134,12 @@ async function main() {
   }
 
   // Stealth flag
-  const isStealth = isGhost || args.includes('-g') || args.includes('--stealth') || readConfig().stealth === true;
+  const isStealth = args.includes('-g') || args.includes('--stealth') || alreadyInQuake || readConfig().stealth === true;
   const filteredArgs = args.filter(a =>
     a !== '-s' && a !== '--shared' &&
     a !== '-g' && a !== '--stealth' &&
     a !== '-G' && a !== '--ghost' &&
-    a !== '--fs' && a !== '--dim'
+    a !== '--in-quake'
   );
 
   // Shared flag
@@ -160,23 +148,8 @@ async function main() {
   // Check stdin for piped data
   const stdinData = await readStdin();
 
-  // Resolve API Key FIRST so user inputs password cleanly without keystroke collisions
+  // Resolve API Key
   const apiKey = await resolveApiKey({ forceShared, silent: isStealth });
-
-  // Apply transparency and fullscreen AFTER password input is complete
-  if (wantTransparent) {
-    setWindowsTerminalTransparent(true);
-  }
-
-  if (wantFullscreen) {
-    setTimeout(() => {
-      toggleFullscreen();
-    }, 120);
-
-    process.on('exit', () => {
-      toggleFullscreen();
-    });
-  }
 
   // Query construction
   const query = filteredArgs.join(' ').trim();
