@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $InstallDir = "$HOME\.ray-agent\bin"
-$PsScriptPath = "$InstallDir\ray.ps1"
+$PsScriptPath = "$InstallDir\ray-core.ps1"
 $CmdPath = "$InstallDir\ray.cmd"
 
 $Repo = "aryansharma48/ray-agent"
@@ -18,7 +18,7 @@ if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-# 2. Download ray.ps1 directly (only ~8 KB, instant 0.1s download!)
+# 2. Download the core script directly (only ~8 KB, instant 0.1s download!)
 Write-Host "Downloading ray client (8 KB)..." -ForegroundColor Gray
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
@@ -31,8 +31,13 @@ if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
 }
 
 # 3. Create the global ray.cmd launcher (so 'ray' works in CMD, PowerShell, and Terminal)
-$cmdContent = "@echo off`r`nsetlocal`r`nset `"SCRIPT_PATH=%~dp0ray.ps1`"`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%SCRIPT_PATH%`" %*`r`nendlocal"
+$cmdContent = "@echo off`r`nsetlocal`r`nset `"SCRIPT_PATH=%~dp0ray-core.ps1`"`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%SCRIPT_PATH%`" %*`r`nendlocal"
 Set-Content -Path $CmdPath -Value $cmdContent -Encoding ASCII
+
+# Remove legacy script name to avoid PowerShell resolving ray.ps1 first (execution policy block on locked-down PCs)
+if (Test-Path "$InstallDir\ray.ps1") {
+    try { Remove-Item "$InstallDir\ray.ps1" -Force } catch {}
+}
 
 # Clean up any legacy dynamically-compiled ray.exe that triggers Defender heuristics
 if (Test-Path "$InstallDir\ray.exe") {
